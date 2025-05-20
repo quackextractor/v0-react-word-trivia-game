@@ -1,0 +1,100 @@
+# Azure DevOps Pipeline for WordBomb Game
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  # Node version
+  nodeVersion: '18.x'
+  # Azure Web App names
+  webAppName: 'wordbomb-frontend'
+  apiAppName: 'wordbomb-api'
+  # Azure Resource Group
+  resourceGroup: 'wordbomb-resources'
+  # Docker registry
+  containerRegistry: 'wordbombregistry'
+  frontendImageName: 'wordbomb-frontend'
+  apiImageName: 'wordbomb-api'
+
+stages:
+  - stage: Build
+    displayName: 'Build and Push Docker Images'
+    jobs:
+      - job: BuildFrontend
+        displayName: 'Build Frontend'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: 'Install Node.js'
+
+          - script: |
+              npm install
+              npm run build
+            displayName: 'npm install and build'
+            workingDirectory: '$(System.DefaultWorkingDirectory)'
+
+          - task: Docker@2
+            displayName: 'Build and push frontend image'
+            inputs:
+              containerRegistry: '$(containerRegistry)'
+              repository: '$(frontendImageName)'
+              command: 'buildAndPush'
+              Dockerfile: '$(System.DefaultWorkingDirectory)/Dockerfile.frontend'
+              tags: |
+                $(Build.BuildId)
+                latest
+
+      - job: BuildAPI
+        displayName: 'Build API'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: 'Install Node.js'
+
+          - script: |
+              npm install
+            displayName: 'npm install'
+            workingDirectory: '$(System.DefaultWorkingDirectory)/server'
+
+          - task: Docker@2
+            displayName: 'Build and push API image'
+            inputs:
+              containerRegistry: '$(containerRegistry)'
+              repository: '$(apiImageName)'
+              command: 'buildAndPush'
+              Dockerfile: '$(System.DefaultWorkingDirectory)/Dockerfile.api'
+              tags: |
+                $(Build.BuildId)
+                latest
+
+  - stage: Deploy
+    displayName: 'Deploy to Azure'
+    dependsOn: Build
+    jobs:
+      - job: DeployFrontend
+        displayName: 'Deploy Frontend'
+        steps:
+          - task: AzureWebAppContainer@1
+            displayName: 'Deploy Frontend to Azure Web App'
+            inputs:
+              azureSubscription: 'Azure Subscription'
+              appName: $(webAppName)
+              resourceGroupName: $(resourceGroup)
+              containers: '$(containerRegistry)/$(frontendImageName):$(Build.BuildId)'
+              appSettings: |
+                -NEXT_PUBLIC_SOCKET_SERVER "https://$(apiAppName).azurewebsites.net"
+
+      - job: DeployAPI
+        displayName: 'Deploy API'
+        steps:
+          - task: AzureWebAppContainer@1
+            displayName: 'Deploy API to Azure Web App'
+            inputs:
+              azureSubscription: 'Azure Subscription'
+              appName: $(apiAppName)
+              resourceGroupName: $(resourceGroup)
+              containers: '$(containerRegistry)/$(apiImageName):$(Build.BuildId)'
