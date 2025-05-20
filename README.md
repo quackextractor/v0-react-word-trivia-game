@@ -58,7 +58,7 @@ A real-time multiplayer word trivia game inspired by Roblox's Word Bomb. Players
 
 1. Clone the repository:
    \`\`\`
-   git clone https://github.com/yourusername/wordbomb.git
+   git clone https://github.com/quackextractor/v0-react-word-trivia-game.git
    cd wordbomb
    \`\`\`
 
